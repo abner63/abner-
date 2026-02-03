@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FluxEx | 实时加密行情</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">FX</div>
+          <div>
+            <h1>FluxEx</h1>
+            <p>Binance 行情驱动的交易终端概念稿</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <label class="search">
+            <span>搜索</span>
+            <input id="search" type="text" placeholder="BTC / ETH / SOL" />
+          </label>
+          <div class="status">
+            <span class="dot" id="status-dot"></span>
+            <span id="status-text">连接 Binance</span>
+          </div>
+          <button id="btn-refresh" class="btn ghost">刷新</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <h2>实时行情 + 交易所风格面板</h2>
+          <p>聚焦主流现货交易对，含 24h 统计、K 线走势、深度档位与最新成交。</p>
+        </div>
+        <div class="hero-card">
+          <div class="hero-symbol" id="hero-symbol">BTCUSDT</div>
+          <div class="hero-price" id="hero-price">--</div>
+          <div class="hero-change" id="hero-change">--</div>
+          <div class="hero-meta">
+            <div>
+              <span>24h 高</span>
+              <strong id="hero-high">--</strong>
+            </div>
+            <div>
+              <span>24h 低</span>
+              <strong id="hero-low">--</strong>
+            </div>
+            <div>
+              <span>24h 量(USDT)</span>
+              <strong id="hero-volume">--</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main class="grid">
+        <section class="panel markets">
+          <header>
+            <h3>市场行情</h3>
+            <span class="hint">24h 统计</span>
+          </header>
+          <div class="market-table" id="market-table">
+            <div class="market-row head">
+              <span>交易对</span>
+              <span>最新价</span>
+              <span>24h%</span>
+              <span>24h量</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel chart">
+          <header>
+            <div>
+              <h3 id="chart-title">BTCUSDT 走势</h3>
+              <span class="hint" id="chart-subtitle">K线 1m / 120 根</span>
+            </div>
+            <div class="intervals" id="intervals">
+              <button data-interval="1m" class="chip active">1m</button>
+              <button data-interval="5m" class="chip">5m</button>
+              <button data-interval="15m" class="chip">15m</button>
+              <button data-interval="1h" class="chip">1h</button>
+              <button data-interval="4h" class="chip">4h</button>
+              <button data-interval="1d" class="chip">1d</button>
+            </div>
+          </header>
+          <div class="chart-wrap">
+            <canvas id="chart" width="720" height="320"></canvas>
+            <div class="chart-overlay">
+              <div>
+                <span>最新</span>
+                <strong id="chart-last">--</strong>
+              </div>
+              <div>
+                <span>趋势</span>
+                <strong id="chart-trend">--</strong>
+              </div>
+              <div>
+                <span>波动</span>
+                <strong id="chart-vol">--</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel depth">
+          <header>
+            <h3>深度档位</h3>
+            <span class="hint">前 10 档</span>
+          </header>
+          <div class="depth-grid">
+            <div>
+              <h4>买盘</h4>
+              <div id="bids" class="depth-list"></div>
+            </div>
+            <div>
+              <h4>卖盘</h4>
+              <div id="asks" class="depth-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel trades">
+          <header>
+            <h3>最新成交</h3>
+            <span class="hint">近 20 笔</span>
+          </header>
+          <div class="trade-table" id="trade-table"></div>
+        </section>
+
+        <section class="panel order">
+          <header>
+            <h3>交易面板</h3>
+            <span class="hint">UI 模拟</span>
+          </header>
+          <div class="order-toggle">
+            <button class="chip active" data-side="buy">买入</button>
+            <button class="chip" data-side="sell">卖出</button>
+          </div>
+          <div class="order-form">
+            <label>
+              <span>价格</span>
+              <input id="order-price" type="number" step="0.0001" placeholder="--" />
+            </label>
+            <label>
+              <span>数量</span>
+              <input id="order-qty" type="number" step="0.0001" placeholder="0.00" />
+            </label>
+            <label>
+              <span>总额(USDT)</span>
+              <input id="order-total" type="number" step="0.01" placeholder="0.00" />
+            </label>
+            <button id="order-submit" class="btn accent">提交委托</button>
+          </div>
+          <div class="order-foot">
+            <div>
+              <span>保证金</span>
+              <strong>模拟账户</strong>
+            </div>
+            <div>
+              <span>手续费</span>
+              <strong>0.10%</strong>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
