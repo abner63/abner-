@@ -14,16 +14,18 @@ import re
 
 TELEGRAM_API_URL = "https://api.telegram.org"
 DEFAULT_FEEDS = [
-    ("Reuters Business", "https://feeds.reuters.com/reuters/businessNews"),
-    ("Reuters World", "https://feeds.reuters.com/Reuters/worldNews"),
     ("CNBC Finance", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
+    ("CNBC Top News", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+    ("Schwab Press", "https://pressroom.aboutschwab.com/rss-feeds/default.aspx?cat=2675"),
+    ("Reuters Business", "https://feeds.reuters.com/reuters/businessNews"),
     ("MarketWatch Top Stories", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
 ]
 
 SOURCE_NAMES_ZH = {
-    "Reuters Business": "路透商业",
-    "Reuters World": "路透国际",
     "CNBC Finance": "CNBC 财经",
+    "CNBC Top News": "CNBC 要闻",
+    "Schwab Press": "嘉信理财",
+    "Reuters Business": "路透商业",
     "MarketWatch Top Stories": "MarketWatch 焦点",
 }
 
@@ -56,6 +58,47 @@ KEYWORD_MAP = {
     "rate cut": "降息",
     "rates": "利率",
     "recession": "衰退",
+    "trump": "特朗普",
+    "merger": "并购",
+    "acquisition": "收购",
+    "ipo": "IPO",
+    "guidance": "业绩指引",
+    "forecast": "预期",
+    "tesla": "特斯拉",
+    "apple": "苹果",
+    "nvidia": "英伟达",
+    "microsoft": "微软",
+    "amazon": "亚马逊",
+    "meta": "Meta",
+}
+
+ACTION_MAP = {
+    "falls": "下跌",
+    "fall": "回落",
+    "drops": "走弱",
+    "drop": "回落",
+    "rises": "走强",
+    "rise": "走强",
+    "gains": "上涨",
+    "gain": "上涨",
+    "jumps": "大涨",
+    "surges": "飙升",
+    "slips": "走弱",
+    "cuts": "下调",
+    "cut": "下调",
+    "hikes": "上调",
+    "raise": "上调",
+    "holds": "维持",
+    "keeps": "维持",
+    "warns": "发出警告",
+    "warn": "发出警告",
+    "beats": "好于预期",
+    "misses": "低于预期",
+    "miss": "低于预期",
+    "approves": "获批",
+    "approval": "获批",
+    "expands": "扩张",
+    "slows": "放缓",
 }
 
 
@@ -220,22 +263,29 @@ def summarize_title(title: str) -> str:
     cleaned = re.sub(r"\s+", " ", title).strip()
     lowered = f" {cleaned.lower()} "
     hits: list[str] = []
+    actions: list[str] = []
 
     for keyword, label in KEYWORD_MAP.items():
         if keyword in lowered and label not in hits:
             hits.append(label)
 
+    for keyword, label in ACTION_MAP.items():
+        if keyword in lowered and label not in actions:
+            actions.append(label)
+
     numbers = re.findall(r"\d+(?:\.\d+)?%?|\$\d+(?:\.\d+)?", cleaned)
-    if numbers:
-        hits.extend(value for value in numbers[:3] if value not in hits)
+    numeric_text = "、".join(numbers[:3]) if numbers else ""
 
-    if not hits:
-        return "关注最新市场动态与标题原文。"
+    if not hits and not actions and not numeric_text:
+        return "关注原文标题涉及的最新市场变化。"
 
-    if len(hits) == 1:
-        return f"关注 {hits[0]} 相关变化。"
+    subject_text = "、".join(hits[:3]) if hits else "相关资产"
+    action_text = actions[0] if actions else "出现新变化"
 
-    return "关注 " + "、".join(hits[:4]) + " 的最新变化。"
+    if numeric_text:
+        return f"{subject_text}{action_text}，标题涉及的关键数字包括 {numeric_text}。"
+
+    return f"{subject_text}{action_text}，建议结合原文判断市场影响。"
 
 
 def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
