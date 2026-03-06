@@ -4,6 +4,7 @@ import html
 import os
 import sys
 import time
+import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -108,6 +109,7 @@ class FeedItem:
     title: str
     link: str
     published_ts: float
+    summary: str = ""
 
 
 def require_env(name: str) -> str:
@@ -124,6 +126,10 @@ def fetch_url(url: str) -> bytes:
     )
     with urllib.request.urlopen(request, timeout=45) as response:
         return response.read()
+
+
+def fetch_text(url: str) -> str:
+    return fetch_url(url).decode("utf-8", errors="replace")
 
 
 def parse_time(raw_value: str) -> float:
@@ -156,6 +162,7 @@ def parse_rss(source: str, xml_bytes: bytes) -> list[FeedItem]:
         title = first_text(item, ["title"])
         link = first_text(item, ["link"])
         published = first_text(item, ["pubDate", "published", "updated"])
+        summary = first_text(item, ["description", "content:encoded"])
         if not title or not link:
             continue
         items.append(
@@ -164,6 +171,7 @@ def parse_rss(source: str, xml_bytes: bytes) -> list[FeedItem]:
                 title=title,
                 link=link,
                 published_ts=parse_time(published),
+                summary=summary,
             )
         )
 
@@ -182,6 +190,13 @@ def parse_rss(source: str, xml_bytes: bytes) -> list[FeedItem]:
                 "{http://www.w3.org/2005/Atom}updated",
             ],
         )
+        summary = first_text(
+            entry,
+            [
+                "{http://www.w3.org/2005/Atom}summary",
+                "{http://www.w3.org/2005/Atom}content",
+            ],
+        )
         if not title or not link:
             continue
         items.append(
@@ -190,6 +205,7 @@ def parse_rss(source: str, xml_bytes: bytes) -> list[FeedItem]:
                 title=title,
                 link=link,
                 published_ts=parse_time(published),
+                summary=summary,
             )
         )
 
@@ -251,7 +267,7 @@ def build_message(items: list[FeedItem]) -> str:
     for index, item in enumerate(items, start=1):
         title = item.title.replace("\n", " ").strip()
         lines.append(f"{index}. [{SOURCE_NAMES_ZH.get(item.source, item.source)}] {title}")
-        lines.append(f"关键信息：{summarize_title(title)}")
+        lines.append(f"关键信息：{summarize_item(item)}")
         lines.append(item.link)
         lines.append("")
 
@@ -259,8 +275,71 @@ def build_message(items: list[FeedItem]) -> str:
     return "\n".join(lines).strip()
 
 
-def summarize_title(title: str) -> str:
-    cleaned = re.sub(r"\s+", " ", title).strip()
+def strip_tags(text: str) -> str:
+    cleaned = re.sub(r"<[^>]+>", " ", text or "")
+    cleaned = html.unescape(cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def extract_article_summary(link: str) -> str:
+    try:
+        page = fetch_text(link)
+    except Exception:
+        return ""
+
+    meta_patterns = [
+        r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']description["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+content=["\'](.*?)["\'][^>]+property=["\']og:description["\']',
+        r'<meta[^>]+content=["\'](.*?)["\'][^>]+name=["\']description["\']',
+    ]
+    for pattern in meta_patterns:
+        match = re.search(pattern, page, re.IGNORECASE | re.DOTALL)
+        if match:
+            return strip_tags(match.group(1))
+
+    json_ld_matches = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        page,
+        re.IGNORECASE | re.DOTALL,
+    )
+    for raw_block in json_ld_matches:
+        try:
+            data = json.loads(raw_block.strip())
+        except Exception:
+            continue
+        for candidate in _flatten_json_ld(data):
+            description = candidate.get("description")
+            if isinstance(description, str) and description.strip():
+                return strip_tags(description)
+
+    paragraph_match = re.search(r"<p[^>]*>(.*?)</p>", page, re.IGNORECASE | re.DOTALL)
+    if paragraph_match:
+        return strip_tags(paragraph_match.group(1))
+    return ""
+
+
+def _flatten_json_ld(data: object) -> list[dict]:
+    if isinstance(data, dict):
+        items = [data]
+        for key in ("@graph", "itemListElement"):
+            nested = data.get(key)
+            if isinstance(nested, list):
+                for child in nested:
+                    items.extend(_flatten_json_ld(child))
+            elif isinstance(nested, dict):
+                items.extend(_flatten_json_ld(nested))
+        return items
+    if isinstance(data, list):
+        items: list[dict] = []
+        for child in data:
+            items.extend(_flatten_json_ld(child))
+        return items
+    return []
+
+
+def summarize_text(text: str, fallback_title: str) -> str:
+    cleaned = re.sub(r"\s+", " ", strip_tags(text) or fallback_title).strip()
     lowered = f" {cleaned.lower()} "
     hits: list[str] = []
     actions: list[str] = []
@@ -273,11 +352,14 @@ def summarize_title(title: str) -> str:
         if keyword in lowered and label not in actions:
             actions.append(label)
 
-    numbers = re.findall(r"\d+(?:\.\d+)?%?|\$\d+(?:\.\d+)?", cleaned)
+    numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?%?|\$\d+(?:,\d{3})*(?:\.\d+)?", cleaned)
     numeric_text = "、".join(numbers[:3]) if numbers else ""
 
     if not hits and not actions and not numeric_text:
-        return "关注原文标题涉及的最新市场变化。"
+        snippet = cleaned[:70]
+        if len(cleaned) > 70:
+            snippet += "..."
+        return snippet or "关注原文涉及的最新市场变化。"
 
     subject_text = "、".join(hits[:3]) if hits else "相关资产"
     action_text = actions[0] if actions else "出现新变化"
@@ -286,6 +368,12 @@ def summarize_title(title: str) -> str:
         return f"{subject_text}{action_text}，标题涉及的关键数字包括 {numeric_text}。"
 
     return f"{subject_text}{action_text}，建议结合原文判断市场影响。"
+
+
+def summarize_item(item: FeedItem) -> str:
+    article_summary = extract_article_summary(item.link)
+    base_text = article_summary or item.summary or item.title
+    return summarize_text(base_text, item.title)
 
 
 def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
@@ -299,7 +387,7 @@ def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
     ).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method="POST")
     with urllib.request.urlopen(request, timeout=60) as response:
-        return __import__("json").loads(response.read().decode("utf-8"))
+        return json.loads(response.read().decode("utf-8"))
 
 
 def main() -> int:
