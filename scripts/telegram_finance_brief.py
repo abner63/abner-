@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+import re
 
 
 TELEGRAM_API_URL = "https://api.telegram.org"
@@ -18,6 +19,44 @@ DEFAULT_FEEDS = [
     ("CNBC Finance", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
     ("MarketWatch Top Stories", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
 ]
+
+SOURCE_NAMES_ZH = {
+    "Reuters Business": "路透商业",
+    "Reuters World": "路透国际",
+    "CNBC Finance": "CNBC 财经",
+    "MarketWatch Top Stories": "MarketWatch 焦点",
+}
+
+KEYWORD_MAP = {
+    "fed": "美联储",
+    "federal reserve": "美联储",
+    "ecb": "欧洲央行",
+    "inflation": "通胀",
+    "cpi": "CPI",
+    "ppi": "PPI",
+    "jobs": "就业",
+    "payrolls": "非农",
+    "treasury": "美债",
+    "bond": "债券",
+    "stocks": "股市",
+    "stock": "股票",
+    "shares": "个股",
+    "oil": "原油",
+    "gold": "黄金",
+    "dollar": "美元",
+    "yuan": "人民币",
+    "bitcoin": "比特币",
+    "crypto": "加密市场",
+    "tariff": "关税",
+    "trade": "贸易",
+    "china": "中国",
+    "us ": "美国",
+    "u.s.": "美国",
+    "earnings": "财报",
+    "rate cut": "降息",
+    "rates": "利率",
+    "recession": "衰退",
+}
 
 
 @dataclass
@@ -168,12 +207,35 @@ def build_message(items: list[FeedItem]) -> str:
 
     for index, item in enumerate(items, start=1):
         title = item.title.replace("\n", " ").strip()
-        lines.append(f"{index}. [{item.source}] {title}")
+        lines.append(f"{index}. [{SOURCE_NAMES_ZH.get(item.source, item.source)}] {title}")
+        lines.append(f"关键信息：{summarize_title(title)}")
         lines.append(item.link)
         lines.append("")
 
     lines.append("Abner 的 AI 助理")
     return "\n".join(lines).strip()
+
+
+def summarize_title(title: str) -> str:
+    cleaned = re.sub(r"\s+", " ", title).strip()
+    lowered = f" {cleaned.lower()} "
+    hits: list[str] = []
+
+    for keyword, label in KEYWORD_MAP.items():
+        if keyword in lowered and label not in hits:
+            hits.append(label)
+
+    numbers = re.findall(r"\d+(?:\.\d+)?%?|\$\d+(?:\.\d+)?", cleaned)
+    if numbers:
+        hits.extend(value for value in numbers[:3] if value not in hits)
+
+    if not hits:
+        return "关注最新市场动态与标题原文。"
+
+    if len(hits) == 1:
+        return f"关注 {hits[0]} 相关变化。"
+
+    return "关注 " + "、".join(hits[:4]) + " 的最新变化。"
 
 
 def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
@@ -216,4 +278,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
