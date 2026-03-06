@@ -261,14 +261,12 @@ def select_recent_items(items: list[FeedItem], max_age_hours: int = 24, limit: i
 def build_message(items: list[FeedItem]) -> str:
     today = __import__("datetime").datetime.now(__import__("datetime").timezone(__import__("datetime").timedelta(hours=8)))
     lines = [f"{today.year}年{today.month}月{today.day}日 财经RSS早报", ""]
-    lines.append("固定新闻源转发，按发布时间近似排序：")
+    lines.append("固定新闻源整理，按发布时间近似排序：")
     lines.append("")
 
     for index, item in enumerate(items, start=1):
-        title = item.title.replace("\n", " ").strip()
-        lines.append(f"{index}. [{SOURCE_NAMES_ZH.get(item.source, item.source)}] {title}")
-        lines.append(f"关键信息：{summarize_item(item)}")
-        lines.append(item.link)
+        lines.append(f"{index}. [{SOURCE_NAMES_ZH.get(item.source, item.source)}]")
+        lines.append(summarize_item(item))
         lines.append("")
 
     lines.append("Abner 的 AI 助理")
@@ -359,21 +357,26 @@ def summarize_text(text: str, fallback_title: str) -> str:
         snippet = cleaned[:70]
         if len(cleaned) > 70:
             snippet += "..."
-        return snippet or "关注原文涉及的最新市场变化。"
+        return snippet or "暂无可用摘要。"
 
     subject_text = "、".join(hits[:3]) if hits else "相关资产"
     action_text = actions[0] if actions else "出现新变化"
 
     if numeric_text:
-        return f"{subject_text}{action_text}，标题涉及的关键数字包括 {numeric_text}。"
+        return f"{subject_text}{action_text}，涉及的关键数字包括 {numeric_text}。"
 
     return f"{subject_text}{action_text}，建议结合原文判断市场影响。"
 
 
 def summarize_item(item: FeedItem) -> str:
     article_summary = extract_article_summary(item.link)
-    base_text = article_summary or item.summary or item.title
-    return summarize_text(base_text, item.title)
+    base_text = article_summary or item.summary
+    cleaned = strip_tags(base_text)
+    if cleaned:
+        if len(cleaned) > 180:
+            cleaned = cleaned[:177].rstrip() + "..."
+        return cleaned
+    return summarize_text(item.title, item.title)
 
 
 def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
@@ -382,7 +385,7 @@ def send_telegram(bot_token: str, chat_id: str, text: str) -> dict:
         {
             "chat_id": chat_id,
             "text": text,
-            "disable_web_page_preview": "false",
+            "disable_web_page_preview": "true",
         }
     ).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method="POST")
